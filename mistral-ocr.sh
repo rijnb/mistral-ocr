@@ -6,8 +6,8 @@
 #   mistral_ocr.sh -i <input_file> [-o <output_file.md>]
 #   mistral_ocr.sh --help
 #
-# Embedded images are saved to _resources/ next to the output file and the
-# markdown references are rewritten to point there automatically.
+# Embedded images are saved to _resources/<inputfile>.resources/ next to the
+# output file and the markdown references are rewritten to point there automatically.
 #
 # Required env vars:
 #   MISTRAL_OCR_API_KEY   — Mistral API key
@@ -137,8 +137,9 @@ if [[ -z "$MARKDOWN" ]]; then
   echo "$RESPONSE" | jq '.' >&2
 fi
 
-# Save embedded images to _resources/ and rewrite markdown references
-RESOURCES_DIR="$(dirname "$OUTPUT")/_resources"
+# Save embedded images to _resources/<inputfile>.resources/ and rewrite markdown references
+INPUT_STEM="$(basename "${INPUT%.*}")"
+RESOURCES_DIR="$(dirname "$OUTPUT")/_resources/${INPUT_STEM}.resources"
 IMAGE_COUNT=0
 while IFS=$'\t' read -r img_id img_b64; do
   [[ -z "$img_id" || -z "$img_b64" ]] && continue
@@ -147,8 +148,8 @@ while IFS=$'\t' read -r img_id img_b64; do
   img_b64="${img_b64#*;base64,}"
   if printf '%s' "$img_b64" | base64 -d > "$RESOURCES_DIR/$img_id" 2>/dev/null; then
     IMAGE_COUNT=$((IMAGE_COUNT + 1))
-    # Rewrite the markdown reference to point into _resources/
-    MARKDOWN=$(printf '%s' "$MARKDOWN" | sed "s|]($img_id)|](_resources/$img_id)|g")
+    # Rewrite the markdown reference to point into _resources/<inputfile>.resources/
+    MARKDOWN=$(printf '%s' "$MARKDOWN" | sed "s|]($img_id)|](_resources/${INPUT_STEM}.resources/$img_id)|g")
   else
     echo "WARNING: failed to save image: $img_id" >&2
   fi
@@ -158,7 +159,23 @@ done < <(echo "$RESPONSE" | jq -r '
   | "\(.id)\t\(.image_base64 | gsub("[\n\r]"; ""))"
 ')
 
-printf '%s\n' "$MARKDOWN" > "$OUTPUT"
+# Build YAML frontmatter
+FM_DATE=$(date +%Y-%m-%d)
+case "${INPUT##*.}" in
+  pdf)       FM_TYPE="pdf" ;;
+  jpg|jpeg)  FM_TYPE="jpg" ;;
+  png)       FM_TYPE="png" ;;
+  *)         FM_TYPE="other" ;;
+esac
+{
+  printf -- '---\n'
+  printf 'type: %s\n'        "$FM_TYPE"
+  printf 'title: "%s"\n'     "$INPUT_STEM"
+  printf 'date: %s\n'        "$FM_DATE"
+  printf 'source: "[[%s]]"\n' "$(basename "$INPUT")"
+  printf -- '---\n\n'
+  printf '%s\n' "$MARKDOWN"
+} > "$OUTPUT"
 
 if [[ "$IMAGE_COUNT" -gt 0 ]]; then
   echo "  images: $IMAGE_COUNT image(s) saved to $RESOURCES_DIR"
