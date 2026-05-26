@@ -14,7 +14,7 @@ Set these environment variables before running:
 
 | Variable | Description | Example |
 |---|---|---|
-| `MISTRAL_OCR_API_KEY` | Your Mistral API key | `sk-...` |
+| `MISTRAL_OCR_API_KEY` | Your Mistral API key | `...` |
 | `MISTRAL_OCR_MODEL` | Model name | `mistral-ocr-latest` |
 | `MISTRAL_OCR_URL` | API endpoint | `https://api.mistral.ai/v1/ocr` |
 
